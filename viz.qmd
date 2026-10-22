@@ -1,0 +1,137 @@
+---
+title: "Infographic Viz"
+author: "Sofia Sarak"
+format: html
+editor: visual
+---
+
+```{r}
+#| message: false
+#| warning: false
+# load in necessary libraries
+library(tidyverse)
+library(here)
+library(janitor)
+library(sf)
+```
+
+Diversion file has data from 2016 to 2019. LEP data is from 2024.
+
+```{r}
+# read in data
+diversion <- read_csv(here("data/Recycling_Diversion_and_Capture_Rates_20261022.csv")) %>% 
+  clean_names()
+lep <- read_csv(here("data/Population_of_the_Limited_English_Proficient_(LEP)_Speakers_by_Community_District_20261022.csv")) %>% 
+  clean_names()
+```
+Diversion and LEP stores community district IDs differently. Clean accordingly.
+
+```{r}
+diversion <- diversion %>% 
+  
+  # pull the borough
+  mutate(borough = case_when(
+             str_starts(district, "Q") ~ "4", # Queens
+             str_starts(district, "BX") ~ "2", # Bronx
+             str_starts(district, "M") ~ "1", # Manhattan
+             str_starts(district, "BK") ~ "3", # Brooklyn
+             str_starts(district, "SI") ~ "5")) %>%  # Staten Island 
+  
+  # pull the code
+  mutate(code = str_sub(district, -2)) %>% 
+    
+  # combine borough number and district code to match lep data
+  mutate(borough_community_district_code = str_c(borough, code))
+
+# save most recent data, which is 2019
+diversion_2019 <- diversion %>% 
+  filter(fiscal_year == 2019)
+```
+
+```{r}
+# sanity check: there should be 59 community districts in each dataset
+length(unique(diversion_2019$borough_community_district_code))
+length(unique(lep$borough_community_district_code))
+```
+
+```{r}
+# select necessary columns
+## diversion
+total_div <- diversion %>% 
+  select(fiscal_month_number, borough_community_district_code, diversion_rate_total_total_recycling_total_waste) %>% 
+  
+  # group by month (take average)
+  group_by(borough_community_district_code) %>% 
+  
+  summarise(avg_diversionn = mean(diversion_rate_total_total_recycling_total_waste, na.rm = TRUE))
+
+## lep
+lep_clean <- lep %>% 
+  select(borough_community_district_code, percent_of_population_that_is_lep, borough) %>% 
+  
+  # make district code a factor vars
+  mutate(borough_community_district_code = as.character(borough_community_district_code))
+```
+
+Join LEP and diversion rates data by community district.
+
+```{r}
+# join LEP and diversion rates by community district code
+div_lep <- total_div %>% 
+  left_join(lep_clean, by = "borough_community_district_code")
+```
+
+We got the clean data! Let's plot.
+
+```{r}
+ggplot(data = div_lep, aes(x = percent_of_population_that_is_lep, y = avg_diversionn, color = borough)) +
+  geom_point() +
+  stat_ellipse()
+```
+
+Bar plot comparing diversion for paper, mgp, and leaves
+
+```{r}
+# let's rotattteeee (so can group by waste type)
+div_long <- diversion %>% 
+  pivot_longer(cols = capture_rate_paper_total_paper_max_paper:capture_rate_total_total_recycling_leaves_recycling_max_paper_max_mgp_x100,
+               names_to = "waste_type",
+               values_to = "capture_rate") %>% 
+  
+  # find average for each type of waste (lumping all community districts together)
+  group_by(waste_type) %>% 
+  summarise(avg_capture_rate = mean(capture_rate, na.rm = TRUE))
+
+# bar plot!
+ggplot(div_long, aes(y = avg_capture_rate, x = waste_type)) +
+  geom_col()
+```
+
+Mapping diversion rates by community districts
+```{r}
+geos <- read_sf(here("data/Community_Districts_20261005.geojson"))
+
+# there are a few "joint interest areas" included in this data, representing places like parks 
+# we will filter them out
+
+jia_codes <- c(164, 226, 227, 228, 355, 356, 480, 481, 482, 483, 484, 595)
+
+geos_clean <- geos %>% 
+  filter(!boro_cd %in% jia_codes)
+
+# keep only boro codes and geos
+geos_clean <- geos_clean %>% 
+  select(boro_cd, geometry)
+```
+
+```{r}
+# join diversion data to district geos
+map <- total_div %>% 
+  left_join(geos_clean, by = c("borough_community_district_code" = "boro_cd")) %>% 
+  st_as_sf()
+```
+
+```{r}
+plot(map)
+```
+
