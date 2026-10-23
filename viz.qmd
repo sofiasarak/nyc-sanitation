@@ -19,6 +19,11 @@ library(tidyverse)
 library(here)
 library(janitor)
 library(sf)
+library(showtext)
+
+
+# import roboto
+font_add_google(name = "Roboto", family = "roboto")
 ```
 
 Diversion file has data from 2016 to 2019. LEP data is from 2024.
@@ -91,13 +96,24 @@ div_lep <- total_div %>%
 We got the clean data! Let's plot.
 
 ```{r}
-ggplot(data = div_lep, aes(x = percent_of_population_that_is_lep, y = avg_diversion, color = borough)) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  facet_wrap(~borough) +
+showtext_auto()
+
+ggplot(data = div_lep, aes(x = percent_of_population_that_is_lep, y = avg_diversion)) +
+  geom_point(color = "#fcba03") +
+  geom_smooth(method = "lm", se = FALSE, color = "#07543A", linewidth = 0.75) +
+  facet_wrap(~borough,
+             axes = "all") +
  # stat_ellipse(type = "t") + 
   theme_minimal() +
-  xlim(-10, 60)
+  xlim(-10, 60) +
+  theme(
+    panel.grid.major = element_line(
+      linewidth = 0.3),
+    axis.text = element_text(color = "#07543A", family = "roboto"))
+
+ggsave(here("plots/scatter.pdf"))
+
+showtext_auto(FALSE)
 ```
 
 ```{r}
