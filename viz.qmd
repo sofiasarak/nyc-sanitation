@@ -105,7 +105,7 @@ ggplot(data = div_lep, aes(x = percent_of_population_that_is_lep, y = avg_divers
              axes = "all") +
  # stat_ellipse(type = "t") + 
   theme_minimal() +
-  xlim(-10, 60) +
+  xlim(0, 60) +
   theme(
     panel.grid.major = element_line(
       linewidth = 0.3),
@@ -202,5 +202,38 @@ div_map <- ggplot() +
         legend.key.height = unit(0.3, "cm"))
 
 ggsave(here("plots/map.pdf"), div_map)
-
 ```
+
+yearly diversion
+```{r}
+# read in diversion data
+yearly <- read_csv(here("data/dsny yearly diversion.csv")) %>% 
+ clean_names()
+```
+plot as line graph
+```{r}
+showtext_auto()
+
+ggplot(yearly, aes(x = year, y = diversion_rate, group = 1)) +
+  geom_line(color = "#fcba03") +
+  labs(x = " ",
+       y = " ") +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text = element_text(color = "gray75",  family = "roboto")) +
+  ylim(13, 21) +
+  scale_y_continuous(
+    limits = c(13, 21),
+    breaks = seq(13, 21, by = 2),
+    labels = function(x) paste0(x, "%")
+  ) +
+  scale_x_continuous(
+    breaks = seq(min(yearly$year), max(yearly$year), by = 2)
+  )
+
+ggsave("plots/yearly.pdf", width = 8, height = 4, unit = "in")
+
+showtext_auto(FALSE)
+```
+
