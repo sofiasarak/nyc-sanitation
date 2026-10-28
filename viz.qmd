@@ -215,19 +215,28 @@ plot as line graph
 showtext_auto()
 
 ggplot(yearly, aes(x = year, y = diversion_rate, group = 1)) +
-  geom_line(color = "#fcba03") +
+  geom_line(color = "#70B349") +
   labs(x = " ",
        y = " ") +
   theme_minimal() +
   theme(panel.grid.major.y = element_blank(),
         panel.grid.minor = element_blank(),
-        axis.text = element_text(color = "gray75",  family = "roboto")) +
+        axis.text = element_text(family = "roboto", size = 12, color = "#07543A"),
+        
+        # add y axis ticks
+         axis.ticks.y = element_line(color = "gray75", size = 0.25),
+        
+        # move ticks to the right
+        
+         axis.ticks.length.y = unit(-0.55, "cm") ) +
+   
+  
   ylim(13, 21) +
   scale_y_continuous(
     limits = c(13, 21),
     breaks = seq(13, 21, by = 2),
-    labels = function(x) paste0(x, "%")
-  ) +
+    labels = function(x) paste0(x, "%"))  +
+  
   scale_x_continuous(
     breaks = seq(min(yearly$year), max(yearly$year), by = 2)
   )
@@ -237,3 +246,4 @@ ggsave("plots/yearly.pdf", width = 8, height = 4, unit = "in")
 showtext_auto(FALSE)
 ```
 
+to do: make text bigger, and/or add ticks on y axis
