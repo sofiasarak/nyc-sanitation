@@ -13,7 +13,7 @@ I recently started a job supporting NYC's Department of Sanitation (DSNY)! To ce
 ```
 ## Data Sources
 - [NYC Open Data](https://www.nyc.gov/opendata): Waste diversion and limited English proficiency rates at the community district level
-- [DSNY](https://www.nyc.gov/site/dsny/resources/statistics/total-annual-collection-diversion.page): Yearly diversion (in separate PDF docs - had to compile manually).
+- [DSNY](https://www.nyc.gov/site/dsny/resources/statistics/total-annual-collection-diversion.page): Yearly diversion (in separate PDF docs - had to compile manually)
 
 ## Tools
 For the most part, I used R's {ggplot2} and {sf} packages to create the three data visualizations. Affinity was used to compile them into one infographic. DSNY's website and branding inspired the color palette.
