@@ -1,19 +1,26 @@
 ---
-title: "Infographic Viz"
+title: "Trash Talk: Exploring New York City's Waste Diversion"
 author: "Sofia Sarak"
 format: html
 editor: visual
 ---
 
-Data sources:
+The following document contains code to create 3 data visualizations pertaining to New York City's waste diversion. Waste diversion rate refers to the amount of waste that is recycled relative to the amount of total waste collected.
+
+**Data sources:**
 - https://data.cityofnewyork.us/Environment/Recycling-Diversion-and-Capture-Rates/gaq9-z3hz/about_data
 - https://data.cityofnewyork.us/City-Government/Population-of-the-Limited-English-Proficient-LEP-S/9ji4-nien/about_data
 - https://data.cityofnewyork.us/City-Government/Community-Districts/5crt-au7u/about_data 
 - https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne/about_data 
 
+*Diversion rate data is from 2016 to 2019. LEP data is from 2024.*
+
+## Setup
+
 ```{r}
 #| message: false
 #| warning: false
+#| 
 # load in necessary libraries
 library(tidyverse)
 library(here)
@@ -22,18 +29,32 @@ library(sf)
 library(showtext)
 
 
-# import roboto
+# import roboto font
 font_add_google(name = "Roboto", family = "roboto")
 ```
 
-Diversion file has data from 2016 to 2019. LEP data is from 2024.
-
 ```{r}
 # read in data
+
+# diversion rate by community district
 diversion <- read_csv(here("data/Recycling_Diversion_and_Capture_Rates_20261022.csv")) %>% 
   clean_names()
+
+# limited english proficiency by community district 
 lep <- read_csv(here("data/Population_of_the_Limited_English_Proficient_(LEP)_Speakers_by_Community_District_20261022.csv")) %>% 
   clean_names()
+
+# community district geometries
+geos <- read_sf(here("data/Community_Districts_20261005.geojson"))
+
+# read in borough boundaries, to plot on top of CD map
+boros <- read_sf(here("data/Borough_Boundaries_20261022.geojson"))
+# ensure boroughs are in the same crs as community districts
+boros <- st_transform(boros, crs = st_crs(geos))
+
+# yearly diversion data -- compiled by hand from DSNY website
+yearly <- read_csv(here("data/dsny yearly diversion.csv")) %>% 
+ clean_names()
 ```
 
 Diversion and LEP stores community district IDs differently. Clean accordingly.
@@ -95,15 +116,24 @@ div_lep <- total_div %>%
 
 We got the clean data! Let's plot.
 
+## Plot 1: Comparing limited English proficiency to average diversion rates in community districts
+
 ```{r}
+# initialize showtext for roboto font
 showtext_auto()
 
+# plot
 ggplot(data = div_lep, aes(x = percent_of_population_that_is_lep, y = avg_diversion)) +
   geom_point(color = "#fcba03") +
+  
+  # add line of best fit
   geom_smooth(method = "lm", se = FALSE, color = "#07543A", linewidth = 0.75) +
+  
+  # facet by borough
   facet_wrap(~borough,
              axes = "all") +
- # stat_ellipse(type = "t") + 
+  
+  # theme customizations
   theme_minimal() +
   xlim(0, 60) +
   theme(
@@ -111,21 +141,118 @@ ggplot(data = div_lep, aes(x = percent_of_population_that_is_lep, y = avg_divers
       linewidth = 0.3),
     axis.text = element_text(color = "#07543A", family = "roboto"))
 
+# save plot
 ggsave(here("plots/scatter.pdf"))
 
 showtext_auto(FALSE)
 ```
 
+## Plot 2: Mapping diversion rates by community districts
+
 ```{r}
-ggplot(data = div_lep, aes(x = percent_of_population_that_is_lep, y = avg_diversion, color = borough)) +
-  geom_point() 
+# there are a few "joint interest areas" included in this data, representing places like parks 
+# we will filter them out
+
+# save vector of codes for joint interest areas
+jia_codes <- c(164, 226, 227, 228, 355, 356, 480, 481, 482, 483, 484, 595)
+
+# filter out 
+geos_clean <- geos %>% 
+  filter(!boro_cd %in% jia_codes)
+
+# keep only boro codes and geos in dataframe
+geos_clean <- geos_clean %>% 
+  select(boro_cd, geometry)
 ```
 
-
-Bar plot comparing diversion for paper, mgp, and leaves
+```{r}
+# join diversion data to district geos
+geos_div <- total_div %>% 
+  left_join(geos_clean, by = c("borough_community_district_code" = "boro_cd")) %>% 
+  st_as_sf()
+```
 
 ```{r}
-# let's rotattteeee (so can group by waste type)
+# experimental plot
+plot(geos_div)
+```
+
+```{r}
+# map
+div_map <- ggplot() +
+  
+  # community districts (plotting by diversion rate)
+  geom_sf(data = geos_div, aes(fill = avg_diversion), color = "white") +
+  
+  # set color palette
+  scale_fill_gradient(low = "#7cc04a", high = "#07543A") +
+  
+  # remove legend title 
+  labs(fill = " ") + 
+  
+  # borough outlines
+  geom_sf(data = boros, color = "gray75", fill = "transparent", linewidth = 0.6) + 
+  
+  # remove legend for boroughs
+  scale_color_discrete(guide = "none") +
+  
+  # theme options
+  theme_void() + 
+  
+  theme(legend.direction = "horizontal",
+        legend.position = "bottom",
+        legend.key.width = unit(.7, "cm"),
+        legend.key.height = unit(0.3, "cm"))
+
+# save map
+ggsave(here("plots/map.pdf"), div_map)
+```
+
+## Plot 3: Line graph of yearly diversion over time
+
+```{r}
+# initialize showtext for roboto font
+showtext_auto()
+
+# plot
+ggplot(yearly, aes(x = year, y = diversion_rate, group = 1)) + # group = 1 so plots as one line
+  geom_line(color = "#70B349") +
+  
+  # theme options
+  labs(x = " ",
+       y = " ") +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text = element_text(family = "roboto", size = 12, color = "#07543A"),
+        
+        # add y axis ticks
+         axis.ticks.y = element_line(color = "gray75", size = 0.25),
+        
+        # move ticks to the right
+         axis.ticks.length.y = unit(-0.55, "cm") ) +
+   
+  ylim(13, 21) +
+  
+  # adjust scale and add "%" to axes
+  scale_y_continuous(
+    limits = c(13, 21),
+    breaks = seq(13, 21, by = 2),
+    labels = function(x) paste0(x, "%"))  +
+  
+  scale_x_continuous(
+    breaks = seq(min(yearly$year), max(yearly$year), by = 2))
+
+# save plot
+ggsave("plots/yearly.pdf", width = 8, height = 4, unit = "in")
+
+showtext_auto(FALSE)
+```
+
+## Plot 4 (didn't make infographic): Comparing diversion for paper, mgp, and leaves
+
+```{r}
+# let's rotattteeee the data (so can group by waste type)
 div_long <- diversion %>% 
   pivot_longer(cols = capture_rate_paper_total_paper_max_paper:capture_rate_total_total_recycling_leaves_recycling_max_paper_max_mgp_x100,
                names_to = "waste_type",
@@ -140,110 +267,4 @@ ggplot(div_long, aes(y = avg_capture_rate, x = waste_type)) +
   geom_col()
 ```
 
-Mapping diversion rates by community districts
-
-```{r}
-geos <- read_sf(here("data/Community_Districts_20261005.geojson"))
-
-# there are a few "joint interest areas" included in this data, representing places like parks 
-# we will filter them out
-
-jia_codes <- c(164, 226, 227, 228, 355, 356, 480, 481, 482, 483, 484, 595)
-
-geos_clean <- geos %>% 
-  filter(!boro_cd %in% jia_codes)
-
-# keep only boro codes and geos
-geos_clean <- geos_clean %>% 
-  select(boro_cd, geometry)
-```
-
-```{r}
-# join diversion data to district geos
-geos_div <- total_div %>% 
-  left_join(geos_clean, by = c("borough_community_district_code" = "boro_cd")) %>% 
-  st_as_sf()
-```
-
-```{r}
-plot(geos_div)
-```
-
-```{r}
-# read in borough boundaries, to plot on top
-boros <- read_sf(here("data/Borough_Boundaries_20261022.geojson"))
-
-# ensure it is the same crs as community districts
-boros <- st_transform(boros, crs = st_crs(geos_div))
-```
-
-```{r}
-div_map <- ggplot() +
-  
-  # community districts (plotting by diversion rate)
-  geom_sf(data = geos_div, aes(fill = avg_diversion), color = "white") +
-  
-  # set color palette
-  scale_fill_gradient(low = "#7cc04a", high = "#07543A") +
-  
-  labs(fill = " ") + 
-  
-  # borough outlines
-  geom_sf(data = boros, color = "gray75", fill = "transparent", linewidth = 0.6) + 
-  
-  
-  scale_color_discrete(guide = "none") +
-  
-  theme_void() + 
-  
-  theme(legend.direction = "horizontal",
-        legend.position = "bottom",
-        legend.key.width = unit(.7, "cm"),
-        legend.key.height = unit(0.3, "cm"))
-
-ggsave(here("plots/map.pdf"), div_map)
-```
-
-yearly diversion
-```{r}
-# read in diversion data
-yearly <- read_csv(here("data/dsny yearly diversion.csv")) %>% 
- clean_names()
-```
-plot as line graph
-```{r}
-showtext_auto()
-
-ggplot(yearly, aes(x = year, y = diversion_rate, group = 1)) +
-  geom_line(color = "#70B349") +
-  labs(x = " ",
-       y = " ") +
-  theme_minimal() +
-  theme(panel.grid.major.y = element_blank(),
-        panel.grid.minor = element_blank(),
-        axis.text = element_text(family = "roboto", size = 12, color = "#07543A"),
-        
-        # add y axis ticks
-         axis.ticks.y = element_line(color = "gray75", size = 0.25),
-        
-        # move ticks to the right
-        
-         axis.ticks.length.y = unit(-0.55, "cm") ) +
-   
-  
-  ylim(13, 21) +
-  scale_y_continuous(
-    limits = c(13, 21),
-    breaks = seq(13, 21, by = 2),
-    labels = function(x) paste0(x, "%"))  +
-  
-  scale_x_continuous(
-    breaks = seq(min(yearly$year), max(yearly$year), by = 2)
-  )
-
-ggsave("plots/yearly.pdf", width = 8, height = 4, unit = "in")
-
-showtext_auto(FALSE)
-```
-
-to do: make text bigger, and/or add ticks on y axis
+All final plots (aside for the Plot 4) saved in `plots` folder of the repository.
